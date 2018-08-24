@@ -15,31 +15,51 @@ module	rtc_clock(
 	output logic [16:0] timer_value_o,
 
 	input  logic        alarm_enable_i,
-	input  logic        alarm_update_i,
+	input  logic  [5:0] alarm_mask_i,
+	input  logic        alarm_update_clock_i,
 	input  logic [21:0] alarm_clock_i,
 	output logic [21:0] alarm_clock_o,
+
+	input  logic        alarm_update_date_i,
+	input  logic [31:0] alarm_date_i,
+	output logic [31:0] alarm_date_o,
+
+	input  logic [31:0] date_i,
 
 	output logic        event_o,
 
 	output logic        update_day_o
 );
 
-	logic [7:0] r_seconds;
-	logic [7:0] r_minutes;
-	logic [6:0] r_hours;
+	logic  [7:0] r_seconds;
+	logic  [7:0] r_minutes;
+	logic  [6:0] r_hours;
 
-	logic [7:0] s_seconds;
-	logic [7:0] s_minutes;
-	logic [6:0] s_hours;
+	logic  [7:0] s_seconds;
+	logic  [7:0] s_minutes;
+	logic  [6:0] s_hours;
 
-	logic [7:0] r_alarm_seconds;
-	logic [7:0] r_alarm_minutes;
-	logic [6:0] r_alarm_hours;
-	logic       r_alarm_enable;
+	logic  [7:0] r_alarm_seconds;
+	logic  [7:0] r_alarm_minutes;
+	logic  [6:0] r_alarm_hours;
+	logic [13:0] r_alarm_year;
+	logic  [4:0] r_alarm_month;
+	logic  [5:0] r_alarm_day;
 
-	logic [7:0] s_alarm_seconds;
-	logic [7:0] s_alarm_minutes;
-	logic [5:0] s_alarm_hours;
+	logic  [5:0] r_alarm_mask;
+	logic        r_alarm_enable;
+
+	logic  [7:0] s_alarm_seconds;
+	logic  [7:0] s_alarm_minutes;
+	logic  [5:0] s_alarm_hours;
+
+	logic [13:0] s_alarm_year;
+	logic  [4:0] s_alarm_month;
+	logic  [5:0] s_alarm_day;
+
+	logic [13:0] s_year;
+	logic  [4:0] s_month;
+	logic  [5:0] s_day;
 
 	logic [14:0] r_sec_counter;
 
@@ -50,6 +70,13 @@ module	rtc_clock(
 	logic r_alarm_match;	
 	logic s_alarm_event;
 	logic s_timer_event;
+
+	logic s_match_year;
+	logic s_match_month;
+	logic s_match_day;
+	logic s_match_hours;
+	logic s_match_minutes;
+	logic s_match_seconds;
 
 	logic [16:0] r_timer;
 	logic [16:0] r_timer_target;
@@ -65,7 +92,20 @@ module	rtc_clock(
 	assign s_alarm_minutes = alarm_clock_i[15:8];
 	assign s_alarm_hours   = alarm_clock_i[21:16];
 
-	assign s_alarm_match = (r_seconds == r_alarm_seconds) & (r_minutes == r_alarm_minutes) & (r_hours == r_alarm_hours);//alarm condition(high for 1 sec)
+	assign s_day    = date_i[5:0];
+	assign s_month  = date_i[12:8];
+	assign s_year   = date_i[29:16];
+
+	assign s_match_year    = r_alarm_mask[5] | ( s_year    == r_alarm_year );
+	assign s_match_month   = r_alarm_mask[4] | ( s_month   == r_alarm_month );
+	assign s_match_day     = r_alarm_mask[3] | ( s_day     == r_alarm_day );
+	assign s_match_hours   = r_alarm_mask[2] | ( r_hours   == r_alarm_hours );
+	assign s_match_minutes = r_alarm_mask[1] | ( r_minutes == r_alarm_minutes );
+	assign s_match_seconds = r_alarm_mask[0] | ( r_seconds == r_alarm_seconds );
+
+	assign s_alarm_match = s_match_year & s_match_month & s_match_day &
+	                       s_match_hours & s_match_minutes & s_match_seconds;
+
 	assign s_alarm_event = r_alarm_enable & s_alarm_match & ~r_alarm_match; //edge detect on alarm event
 
 	assign s_timer_match = r_timer == r_timer_target;
@@ -78,7 +118,8 @@ module	rtc_clock(
 	assign event_o        = s_alarm_event | s_timer_event;
 	assign update_day_o   = s_update_hours & (r_hours == 6'h23);
 	assign clock_o        = {r_hours,r_minutes,r_seconds};
-	assign alarm_clock_o = {r_alarm_hours,r_alarm_minutes,r_alarm_seconds};
+	assign alarm_clock_o  = {r_alarm_hours,r_alarm_minutes,r_alarm_seconds};
+	assign alarm_date_o   = {2'b00,r_alarm_year,3'b000,r_alarm_month,2'b00,r_alarm_day};
 
 	assign timer_value_o = r_timer;
 
@@ -90,18 +131,29 @@ module	rtc_clock(
             r_alarm_minutes <= 'h0;
             r_alarm_hours   <= 'h0;
             r_alarm_enable  <= 'h0;
+            r_alarm_mask    <= 'h0;
+            r_alarm_year    <= 'h0;
+            r_alarm_month   <= 'h0;
+            r_alarm_day     <= 'h0;
         end
         else
         begin
-        	if (alarm_update_i)
+        	if (alarm_update_clock_i)
         	begin
         		r_alarm_enable  <= alarm_enable_i;
             	r_alarm_seconds <= s_alarm_seconds;
             	r_alarm_minutes <= s_alarm_minutes;
             	r_alarm_hours   <= s_alarm_hours  ;
+            	r_alarm_mask    <= alarm_mask_i;
         	end
         	else if(s_alarm_event) //disable alarm when alarm event is generated(sw must retrigger)
         		r_alarm_enable <= 'h0;
+        	if (alarm_update_date_i)
+        	begin
+	            r_alarm_year    <= s_alarm_year;
+    	        r_alarm_month   <= s_alarm_month;
+        	    r_alarm_day     <= s_alarm_day;
+        	end
         end
     end
 
