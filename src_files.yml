@@ -1,0 +1,6 @@
+rtc:
+  files: [
+    rtl/rtc_clock.sv,
+    rtl/rtc_date.sv,
+    rtl/rtc_top.sv,
+  ]
