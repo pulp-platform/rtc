@@ -30,6 +30,9 @@ module rtc_clock (
 
                   input logic [31:0]  date_i,
 
+                  input logic         event_flag_update_i,
+                  input logic [1:0]   event_flag_i ,
+                  output logic [1:0]  event_flag_o,
                   output logic        event_o,
 
                   output logic        update_day_o
@@ -88,6 +91,7 @@ module rtc_clock (
    logic                              r_timer_en;
    logic                              r_timer_retrig;
 
+   logic [1:0]                        r_event_flag;
 
    assign s_seconds = clock_i[7:0];
    assign s_minutes = clock_i[15:8];
@@ -132,6 +136,33 @@ module rtc_clock (
 
    assign timer_value_o     = r_timer;
    assign calibre_sec_cnt_o = r_sec_cnt_calibre;
+   assign event_flag_o      = r_event_flag;
+
+
+   always @ (posedge clk_i or negedge rstn_i)
+     begin
+        if(~rstn_i)
+          r_event_flag <= 'h0;
+        else
+          begin
+             if (event_flag_update_i)
+               begin
+                  if (event_flag_i[0])
+                    r_event_flag[0] <= 1'b0;
+
+                  if (event_flag_i[1])
+                    r_event_flag[1] <= 1'b0;
+               end // if (event_flag_update_i)
+             else if (s_alarm_event)
+               begin
+                  r_event_flag[0] <= 1'b1;
+               end
+             else if (s_timer_event)
+               begin
+                  r_event_flag[1] <= 1'b1;
+               end
+          end
+     end
 
    always @ (posedge clk_i or negedge rstn_i)
      begin
